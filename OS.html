@@ -1,0 +1,620 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>WebOS - MacStyle with Login</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body, html {
+      width: 100%;
+      height: 100%;
+      font-family: sans-serif;
+      overflow: hidden;
+    }
+    body {
+      background: url('https://wallpaperaccess.com/full/317501.jpg') no-repeat center center fixed;
+      background-size: cover;
+    }
+
+    /* Login Screen */
+    #login-screen {
+      position: fixed;
+      top: 0; left: 0; width: 100vw; height: 100vh;
+      background: rgba(0,0,0,0.7);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      z-index: 9999;
+    }
+    #login-box {
+      background: rgba(255,255,255,0.9);
+      padding: 30px;
+      border-radius: 12px;
+      width: 300px;
+      box-shadow: 0 0 20px rgba(0,0,0,0.5);
+      text-align: center;
+    }
+    #login-box h2 {
+      margin-bottom: 20px;
+      color: #333;
+    }
+    #login-box input {
+      width: 100%;
+      padding: 10px;
+      margin: 10px 0;
+      border-radius: 6px;
+      border: 1px solid #ccc;
+      font-size: 16px;
+    }
+    #login-box button {
+      width: 100%;
+      padding: 10px;
+      margin: 10px 0;
+      border: none;
+      background: #0078d7;
+      color: white;
+      font-size: 16px;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: background 0.3s ease;
+    }
+    #login-box button:hover {
+      background: #005fa3;
+    }
+    #login-box .toggle-link {
+      margin-top: 10px;
+      font-size: 14px;
+      color: #0078d7;
+      cursor: pointer;
+      text-decoration: underline;
+    }
+    #error-msg {
+      color: red;
+      margin-top: 10px;
+      min-height: 18px;
+    }
+
+    /* Desktop */
+    #desktop {
+      width: 100vw;
+      height: 100vh;
+      position: relative;
+      display: none;
+    }
+
+    /* Taskbar */
+    #taskbar {
+      position: fixed;
+      bottom: 0;
+      width: 100%;
+      height: 60px;
+      background: rgba(255, 255, 255, 0.2);
+      backdrop-filter: blur(10px);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 999;
+    }
+    .app-icon {
+      margin: 0 15px;
+      cursor: pointer;
+      font-size: 28px;
+      user-select: none;
+    }
+
+    /* Window */
+    .window {
+      position: absolute;
+      width: 600px;
+      height: 400px;
+      background: white;
+      border-radius: 10px;
+      box-shadow: 0 10px 20px rgba(0,0,0,0.3);
+      overflow: hidden;
+      resize: both;
+      z-index: 1;
+      display: flex;
+      flex-direction: column;
+    }
+    .title-bar {
+      background: #333;
+      color: white;
+      padding: 5px 10px;
+      display: flex;
+      justify-content: space-between;
+      cursor: move;
+      user-select: none;
+      flex-shrink: 0;
+    }
+    .content {
+      flex-grow: 1;
+      overflow-y: auto;
+      padding: 10px;
+    }
+
+    /* File Explorer */
+    .file-explorer ul { list-style: none; padding-left: 20px;}
+    .file-explorer li { margin: 5px 0; }
+    .file-explorer button {
+      margin-left: 10px;
+      cursor: pointer;
+    }
+
+    /* Terminal */
+    .terminal {
+      background: #1e1e1e;
+      color: #00ff88;
+      font-family: monospace;
+      font-size: 14px;
+      height: 100%;
+      overflow-y: auto;
+      padding: 10px;
+      display: flex;
+      flex-direction: column;
+    }
+    .input-line {
+      display: flex;
+      align-items: center;
+      margin-top: 5px;
+    }
+    .input-line span {
+      flex-shrink: 0;
+      margin-right: 5px;
+    }
+    .input-line input {
+      background: transparent;
+      border: none;
+      color: #00ff88;
+      outline: none;
+      font-family: monospace;
+      flex-grow: 1;
+      font-size: 14px;
+    }
+
+    /* Browser */
+    iframe.browser-frame {
+      border: none;
+      width: 100%;
+      height: 100%;
+    }
+
+    /* Simple Games container */
+    #game-screen {
+      width: 100%;
+      height: 100%;
+      background: #222;
+      color: white;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      font-size: 24px;
+      user-select: none;
+    }
+
+  </style>
+</head>
+<body>
+  <!-- Login Screen -->
+  <div id="login-screen">
+    <div id="login-box">
+      <h2 id="login-title">Login</h2>
+      <input type="text" id="login-username" placeholder="Username" autocomplete="username" />
+      <input type="password" id="login-password" placeholder="Password" autocomplete="current-password" />
+      <button id="login-button">Login</button>
+      <div class="toggle-link" id="toggle-register">Create an account</div>
+      <div id="error-msg"></div>
+    </div>
+  </div>
+
+  <!-- Desktop -->
+  <div id="desktop">
+    <div id="taskbar">
+      <div class="app-icon" title="Terminal" onclick="openTerminal()">🖥️</div>
+      <div class="app-icon" title="File Explorer" onclick="openFileExplorer()">📁</div>
+      <div class="app-icon" title="Web Browser" onclick="openBrowser()">🌐</div>
+      <div class="app-icon" title="Games" onclick="openGames()">🎮</div>
+      <div class="app-icon" title="Sound Player" onclick="openSoundPlayer()">🎵</div>
+      <div class="app-icon" title="Settings" onclick="openSettings()">⚙️</div>
+      <div class="app-icon" title="Logout" onclick="logout()">🚪</div>
+    </div>
+  </div>
+
+<script>
+  let zIndex = 10;
+
+  // File system data structure in localStorage
+  let fs = JSON.parse(localStorage.getItem('filesystem')) || { '/': {} };
+  let currentPath = '/';
+
+  // Current logged in user
+  let currentUser = localStorage.getItem('currentUser') || null;
+
+  // Elements
+  const loginScreen = document.getElementById('login-screen');
+  const desktop = document.getElementById('desktop');
+  const loginTitle = document.getElementById('login-title');
+  const loginUsernameInput = document.getElementById('login-username');
+  const loginPasswordInput = document.getElementById('login-password');
+  const loginButton = document.getElementById('login-button');
+  const toggleRegisterLink = document.getElementById('toggle-register');
+  const errorMsg = document.getElementById('error-msg');
+
+  // State for login/register toggle
+  let isRegisterMode = false;
+
+  // Save filesystem state
+  function saveFS() {
+    localStorage.setItem('filesystem', JSON.stringify(fs));
+  }
+
+  // Get directory from path
+  function getDir(path) {
+    const parts = path.split('/').filter(Boolean);
+    let dir = fs['/'];
+    for (let part of parts) {
+      if (!dir[part] || typeof dir[part] !== 'object') return null;
+      dir = dir[part];
+    }
+    return dir;
+  }
+
+  // Save users object in localStorage
+  function saveUsers(users) {
+    localStorage.setItem('users', JSON.stringify(users));
+  }
+
+  // Load users object from localStorage
+  function loadUsers() {
+    return JSON.parse(localStorage.getItem('users') || '{}');
+  }
+
+  // Show error message under login form
+  function showError(message) {
+    errorMsg.textContent = message;
+  }
+
+  // Clear error
+  function clearError() {
+    errorMsg.textContent = '';
+  }
+
+  // Show desktop & hide login
+  function showDesktop() {
+    loginScreen.style.display = 'none';
+    desktop.style.display = 'block';
+    openWelcomeWindow();
+  }
+
+  // Show login screen & hide desktop
+  function showLogin() {
+    desktop.style.display = 'none';
+    loginScreen.style.display = 'flex';
+    loginUsernameInput.value = '';
+    loginPasswordInput.value = '';
+    clearError();
+  }
+
+  // Login button click handler
+  loginButton.addEventListener('click', () => {
+    clearError();
+    const username = loginUsernameInput.value.trim();
+    const password = loginPasswordInput.value;
+
+    if (!username || !password) {
+      showError('Please enter username and password');
+      return;
+    }
+
+    const users = loadUsers();
+
+    if (isRegisterMode) {
+      // Register flow
+      if (users[username]) {
+        showError('Username already exists');
+        return;
+      }
+      // Save new user
+      users[username] = {
+        password: password,
+        wallpaper: 'https://wallpaperaccess.com/full/317501.jpg', // default wallpaper
+        fs: { '/': {} } // each user gets their own filesystem
+      };
+      saveUsers(users);
+      alert('Account created! Please login now.');
+      toggleLoginRegister();
+      return;
+    } else {
+      // Login flow
+      if (!users[username] || users[username].password !== password) {
+        showError('Invalid username or password');
+        return;
+      }
+      currentUser = username;
+      localStorage.setItem('currentUser', currentUser);
+      // Load user's filesystem and wallpaper
+      fs = users[username].fs || { '/': {} };
+      saveFS();
+      setWallpaper(users[username].wallpaper);
+      showDesktop();
+    }
+  });
+
+  // Toggle between login and register form
+  toggleRegisterLink.addEventListener('click', toggleLoginRegister);
+  function toggleLoginRegister() {
+    isRegisterMode = !isRegisterMode;
+    loginTitle.textContent = isRegisterMode ? 'Create Account' : 'Login';
+    loginButton.textContent = isRegisterMode ? 'Register' : 'Login';
+    toggleRegisterLink.textContent = isRegisterMode ? 'Back to Login' : 'Create an account';
+    clearError();
+  }
+
+  // Logout function
+  function logout() {
+    // Save user data before logout
+    if (!currentUser) return;
+    const users = loadUsers();
+    users[currentUser].fs = fs;
+    saveUsers(users);
+
+    currentUser = null;
+    localStorage.removeItem('currentUser');
+    fs = { '/': {} };
+    saveFS();
+    showLogin();
+  }
+
+  // Set wallpaper on body background
+  function setWallpaper(url) {
+    document.body.style.backgroundImage = `url('${url}')`;
+  }
+
+  // On page load - check if user is logged in
+  window.onload = () => {
+    if (currentUser) {
+      const users = loadUsers();
+      if (users[currentUser]) {
+        fs = users[currentUser].fs || { '/': {} };
+        saveFS();
+        setWallpaper(users[currentUser].wallpaper);
+        showDesktop();
+      } else {
+        // User data missing? force login screen
+        showLogin();
+      }
+    } else {
+      showLogin();
+    }
+  };
+
+  // UI Windows & Apps
+
+  function makeWindow(title, contentHTML) {
+    const win = document.createElement('div');
+    win.className = 'window';
+    win.style.top = '100px';
+    win.style.left = '100px';
+    win.style.zIndex = zIndex++;
+
+    const titleBar = document.createElement('div');
+    titleBar.className = 'title-bar';
+    titleBar.innerHTML = `<span>${title}</span><span style="cursor:pointer;">❌</span>`;
+    titleBar.querySelector('span:last-child').onclick = () => win.remove();
+
+    const content = document.createElement('div');
+    content.className = 'content';
+    content.innerHTML = contentHTML;
+
+    win.appendChild(titleBar);
+    win.appendChild(content);
+    desktop.appendChild(win);
+    makeDraggable(win, titleBar);
+    return content;
+  }
+
+  function makeDraggable(win, bar) {
+    let isDown = false, offsetX, offsetY;
+    bar.onmousedown = (e) => {
+      isDown = true;
+      offsetX = e.offsetX;
+      offsetY = e.offsetY;
+      win.style.zIndex = zIndex++;
+    };
+    document.onmouseup = () => isDown = false;
+    document.onmousemove = (e) => {
+      if (isDown) {
+        win.style.left = (e.clientX - offsetX) + 'px';
+        win.style.top = (e.clientY - offsetY) + 'px';
+      }
+    };
+  }
+
+  // Welcome window on desktop load
+  function openWelcomeWindow() {
+    makeWindow('Welcome', `<p>Welcome back, <b>${currentUser}</b>!</p><p>Use the taskbar icons to open apps.</p>`);
+  }
+
+  // Terminal App
+  function openTerminal() {
+    const term = makeWindow('Terminal', '<div class="terminal" id="terminal"></div>');
+    const termDiv = term.querySelector('#terminal');
+
+    function printPrompt() {
+      const line = document.createElement('div');
+      line.className = 'input-line';
+      line.innerHTML = `user@webos:${currentPath}$ <input type="text" autofocus />`;
+      termDiv.appendChild(line);
+      const input = line.querySelector('input');
+      input.focus();
+      input.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter') {
+          const output = document.createElement('div');
+          const result = runCommand(input.value);
+          output.textContent = result;
+          termDiv.appendChild(output);
+          input.disabled = true;
+          printPrompt();
+          termDiv.scrollTop = termDiv.scrollHeight;
+        }
+      });
+    }
+
+    function runCommand(cmd) {
+      const parts = cmd.trim().split(' ').filter(Boolean);
+      const base = parts[0], args = parts.slice(1);
+      const dir = getDir(currentPath);
+      if (!dir) return 'Invalid path';
+
+      switch (base) {
+        case 'mkdir':
+          if (!args[0]) return 'Usage: mkdir <dirname>';
+          if (dir[args[0]]) return 'Directory or file already exists';
+          dir[args[0]] = {};
+          saveFS();
+          return '';
+        case 'touch':
+          if (!args[0]) return 'Usage: touch <filename>';
+          if (dir[args[0]]) return 'File or directory already exists';
+          dir[args[0]] = '';
+          saveFS();
+          return '';
+        case 'echo':
+          const i = args.indexOf('>');
+          if (i !== -1 && args[i + 1]) {
+            const file = args[i + 1];
+            const txt = args.slice(0, i).join(' ');
+            dir[file] = txt;
+            saveFS();
+            return '';
+          } else {
+            return args.join(' ');
+          }
+        case 'cat':
+          if (!args[0]) return 'Usage: cat <filename>';
+          if (!(args[0] in dir)) return 'File not found';
+          if (typeof dir[args[0]] === 'object') return 'Cannot cat a directory';
+          return dir[args[0]];
+        case 'ls':
+          return Object.keys(dir).join('  ');
+        case 'cd':
+          if (!args[0]) return 'Usage: cd <dir>';
+          if (args[0] === '..') {
+            const parts = currentPath.split('/').filter(Boolean);
+            parts.pop();
+            currentPath = '/' + parts.join('/') + (parts.length ? '/' : '');
+            return '';
+          } else if (dir[args[0]] && typeof dir[args[0]] === 'object') {
+            currentPath += args[0] + '/';
+            return '';
+          } else {
+            return 'No such directory';
+          }
+        case 'clear':
+          termDiv.innerHTML = '';
+          return '';
+        default:
+          return 'Command not found';
+      }
+    }
+
+    printPrompt();
+  }
+
+  // File Explorer App
+  function openFileExplorer() {
+    const content = makeWindow('File Explorer', `<div class="file-explorer" id="explorer"></div>`);
+    renderExplorer(currentPath);
+
+    function renderExplorer(path) {
+      const dir = getDir(path);
+      if (!dir) return;
+      let html = `<ul>`;
+      for (let key in dir) {
+        if (typeof dir[key] === 'object') {
+          html += `<li><b>[${key}]</b> <button onclick="exploreDir('${path + key}/')">Open</button></li>`;
+        } else {
+          html += `<li>${key}: ${dir[key]}</li>`;
+        }
+      }
+      html += `</ul>`;
+      document.getElementById('explorer').innerHTML = `
+        <div>
+          <button onclick="exploreDir('${getParentPath(path)}')">⬆️ Up</button>
+        </div>
+        <div><strong>Current Path: ${path}</strong></div>
+        ${html}
+      `;
+    }
+
+    window.exploreDir = renderExplorer;
+
+    function getParentPath(p) {
+      const parts = p.split('/').filter(Boolean);
+      parts.pop();
+      return '/' + parts.join('/') + (parts.length ? '/' : '');
+    }
+  }
+
+  // Browser App
+  function openBrowser() {
+    const content = makeWindow('Web Browser', `
+      <div>
+        <input type="text" id="url-input" placeholder="Enter URL" style="width: 80%;" />
+        <button id="go-btn">Go</button>
+      </div>
+      <iframe src="https://www.example.com" class="browser-frame" id="browser-frame"></iframe>
+    `);
+    const urlInput = content.querySelector('#url-input');
+    const goBtn = content.querySelector('#go-btn');
+    const iframe = content.querySelector('#browser-frame');
+
+    goBtn.onclick = () => {
+      let url = urlInput.value.trim();
+      if (!url) return;
+      if (!url.startsWith('http://') && !url.startsWith('https://')) url = 'http://' + url;
+      iframe.src = url;
+    };
+  }
+
+  // Games App (simple placeholder)
+  function openGames() {
+    makeWindow('Games', '<div id="game-screen">🎮 No games installed yet.</div>');
+  }
+
+  // Sound Player App (placeholder)
+  function openSoundPlayer() {
+    makeWindow('Sound Player', '<p>No sounds available yet.</p>');
+  }
+
+  // Settings App - change wallpaper
+  function openSettings() {
+    const content = makeWindow('Settings', `
+      <p>Change Wallpaper URL:</p>
+      <input type="text" id="wallpaper-url" placeholder="Enter image URL" style="width: 90%;" />
+      <button id="save-wallpaper">Save</button>
+    `);
+    const input = content.querySelector('#wallpaper-url');
+    const btn = content.querySelector('#save-wallpaper');
+
+    const users = loadUsers();
+    if (users[currentUser] && users[currentUser].wallpaper) {
+      input.value = users[currentUser].wallpaper;
+    }
+
+    btn.onclick = () => {
+      const url = input.value.trim();
+      if (!url) {
+        alert('Please enter a valid URL');
+        return;
+      }
+      setWallpaper(url);
+      // Save to user profile
+      users[currentUser].wallpaper = url;
+      saveUsers(users);
+      alert('Wallpaper updated!');
+    };
+  }
+
+</script>
+</body>
+</html>

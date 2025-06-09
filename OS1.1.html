@@ -1,0 +1,675 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>WebOS with Login, Apps, and Games</title>
+<style>
+  * { margin:0; padding:0; box-sizing: border-box; }
+  body, html {
+    height: 100%; font-family: sans-serif; overflow: hidden;
+    background: url('https://wallpaperaccess.com/full/317501.jpg') no-repeat center center fixed;
+    background-size: cover;
+  }
+  #desktop {
+    position: relative;
+    width: 100vw;
+    height: 100vh;
+  }
+  #taskbar {
+    position: fixed;
+    bottom: 0;
+    width: 100%;
+    height: 60px;
+    background: rgba(255,255,255,0.15);
+    backdrop-filter: blur(10px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 9999;
+  }
+  .app-icon {
+    margin: 0 15px;
+    cursor: pointer;
+    font-size: 28px;
+    user-select: none;
+  }
+  .window {
+    position: absolute;
+    width: 600px;
+    height: 400px;
+    background: white;
+    border-radius: 10px;
+    box-shadow: 0 10px 20px rgba(0,0,0,0.3);
+    overflow: hidden;
+    resize: both;
+    z-index: 10;
+    display: flex;
+    flex-direction: column;
+  }
+  .title-bar {
+    background: #222;
+    color: white;
+    padding: 5px 10px;
+    display: flex;
+    justify-content: space-between;
+    cursor: move;
+    user-select: none;
+  }
+  .title-bar span.close-btn {
+    cursor: pointer;
+    font-weight: bold;
+  }
+  .content {
+    flex: 1;
+    overflow-y: auto;
+    padding: 10px;
+    background: #f0f0f0;
+  }
+  .file-explorer ul {
+    list-style: none;
+  }
+  .file-explorer li {
+    margin: 5px 0;
+  }
+  .terminal {
+    background: #111;
+    color: #0f0;
+    font-family: monospace;
+    font-size: 14px;
+    height: 100%;
+    overflow-y: auto;
+    padding: 10px;
+    display: flex;
+    flex-direction: column;
+  }
+  .terminal .input-line {
+    display: flex;
+  }
+  .terminal input {
+    background: transparent;
+    border: none;
+    color: #0f0;
+    outline: none;
+    font-family: monospace;
+    flex-grow: 1;
+    font-size: 14px;
+  }
+  iframe.browser-frame {
+    border: none;
+    width: 100%;
+    height: 100%;
+  }
+  #login-screen, #create-account-screen {
+    position: absolute;
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    background: rgba(255,255,255,0.95);
+    border-radius: 12px;
+    padding: 30px;
+    width: 320px;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+    z-index: 10000;
+    user-select: none;
+  }
+  #login-screen h2, #create-account-screen h2 {
+    margin-bottom: 15px;
+    text-align: center;
+  }
+  #login-screen input, #create-account-screen input {
+    width: 100%;
+    margin-bottom: 15px;
+    padding: 8px;
+    font-size: 16px;
+  }
+  #login-screen button, #create-account-screen button {
+    width: 100%;
+    padding: 10px;
+    background: #333;
+    color: white;
+    border: none;
+    cursor: pointer;
+    font-size: 16px;
+    border-radius: 5px;
+  }
+  #login-screen button:hover, #create-account-screen button:hover {
+    background: #555;
+  }
+  #login-screen .link, #create-account-screen .link {
+    margin-top: 10px;
+    text-align: center;
+    color: #0066cc;
+    cursor: pointer;
+  }
+  #app-store-list, #games-list {
+    max-height: 260px;
+    overflow-y: auto;
+  }
+  button {
+    cursor: pointer;
+  }
+</style>
+</head>
+<body>
+
+<div id="desktop"></div>
+
+<div id="taskbar" style="display:none;">
+  <div class="app-icon" title="Terminal" onclick="openTerminal()">🖥️</div>
+  <div class="app-icon" title="File Explorer" onclick="openFileExplorer()">📁</div>
+  <div class="app-icon" title="Browser" onclick="openBrowser()">🌐</div>
+  <div class="app-icon" title="Games" onclick="openGames()">🎮</div>
+  <div class="app-icon" title="App Store" onclick="openAppStore()">🛒</div>
+  <div class="app-icon" title="Settings" onclick="openSettings()">⚙️</div>
+  <div class="app-icon" title="Logout" onclick="logout()">🔓</div>
+</div>
+
+<!-- Login Screen -->
+<div id="login-screen">
+  <h2>Login</h2>
+  <input type="text" id="login-username" placeholder="Username" autocomplete="username" />
+  <input type="password" id="login-password" placeholder="Password" autocomplete="current-password" />
+  <button id="login-btn">Login</button>
+  <div class="link" id="go-create-account">Create Account</div>
+  <div id="login-msg" style="color:red; text-align:center; margin-top:10px;"></div>
+</div>
+
+<!-- Create Account Screen -->
+<div id="create-account-screen" style="display:none;">
+  <h2>Create Account</h2>
+  <input type="text" id="create-username" placeholder="Username" autocomplete="username" />
+  <input type="password" id="create-password" placeholder="Password" autocomplete="new-password" />
+  <button id="create-btn">Create</button>
+  <div class="link" id="go-login">Back to Login</div>
+  <div id="create-msg" style="color:red; text-align:center; margin-top:10px;"></div>
+</div>
+
+<script>
+(() => {
+  // --- GLOBAL STATE ---
+  let zIndex = 10;
+  let fs = {}; // will be loaded per user after login
+  let currentPath = '/';
+  let currentUser = null;
+  let users = JSON.parse(localStorage.getItem('users')) || {};
+
+  // --- UTILITIES ---
+  function saveUsers() {
+    localStorage.setItem('users', JSON.stringify(users));
+  }
+
+  function loadUsers() {
+    users = JSON.parse(localStorage.getItem('users')) || {};
+    return users;
+  }
+
+  function saveFS() {
+    if (!currentUser) return;
+    users[currentUser].filesystem = fs;
+    saveUsers();
+  }
+
+  function loadFS() {
+    if (!currentUser) return;
+    fs = users[currentUser].filesystem || { '/': {} };
+    currentPath = '/';
+  }
+
+  function getDir(path) {
+    const parts = path.split('/').filter(Boolean);
+    let dir = fs['/'];
+    for (let part of parts) {
+      if (!dir[part] || typeof dir[part] !== 'object') return null;
+      dir = dir[part];
+    }
+    return dir;
+  }
+
+  function getParentPath(p) {
+    const parts = p.split('/').filter(Boolean);
+    parts.pop();
+    return '/' + parts.join('/') + (parts.length ? '/' : '');
+  }
+
+  // --- WINDOW MANAGEMENT ---
+  function makeWindow(title, contentHTML) {
+    const win = document.createElement('div');
+    win.className = 'window';
+    win.style.top = '100px';
+    win.style.left = '100px';
+    win.style.zIndex = zIndex++;
+
+    const titleBar = document.createElement('div');
+    titleBar.className = 'title-bar';
+    titleBar.innerHTML = `<span>${title}</span><span class="close-btn" title="Close">❌</span>`;
+
+    titleBar.querySelector('.close-btn').onclick = () => win.remove();
+
+    const content = document.createElement('div');
+    content.className = 'content';
+    content.innerHTML = contentHTML;
+
+    win.appendChild(titleBar);
+    win.appendChild(content);
+    document.getElementById('desktop').appendChild(win);
+    makeDraggable(win, titleBar);
+    return content;
+  }
+
+  function makeDraggable(win, bar) {
+    let isDown = false, offsetX, offsetY;
+    bar.onmousedown = (e) => {
+      isDown = true;
+      offsetX = e.offsetX;
+      offsetY = e.offsetY;
+      win.style.zIndex = zIndex++;
+    };
+    document.onmouseup = () => isDown = false;
+    document.onmousemove = (e) => {
+      if (isDown) {
+        win.style.left = (e.clientX - offsetX) + 'px';
+        win.style.top = (e.clientY - offsetY) + 'px';
+      }
+    };
+  }
+
+  // --- TERMINAL ---
+  function openTerminal() {
+    const term = makeWindow('Terminal', '<div class="terminal" id="terminal"></div>');
+    const termDiv = term.querySelector('#terminal');
+
+    function printPrompt() {
+      const line = document.createElement('div');
+      line.className = 'input-line';
+      line.innerHTML = `user@webos:${currentPath}$ <input type="text" autofocus />`;
+      termDiv.appendChild(line);
+      const input = line.querySelector('input');
+      input.focus();
+      input.addEventListener('keydown', e => {
+        if (e.key === 'Enter') {
+          const output = document.createElement('div');
+          const cmd = input.value.trim();
+          const result = runCommand(cmd);
+          output.textContent = result;
+          termDiv.appendChild(output);
+          input.disabled = true;
+          termDiv.scrollTop = termDiv.scrollHeight;
+          printPrompt();
+        }
+      });
+      termDiv.scrollTop = termDiv.scrollHeight;
+    }
+
+    function runCommand(cmd) {
+      if (!cmd) return '';
+      const parts = cmd.split(' ');
+      const base = parts[0];
+      const args = parts.slice(1);
+      const dir = getDir(currentPath);
+      if (!dir) return 'Invalid path';
+
+      switch(base) {
+        case 'mkdir':
+          if (!args[0]) return 'Usage: mkdir <foldername>';
+          if (dir[args[0]]) return 'Folder or file already exists';
+          dir[args[0]] = {};
+          saveFS();
+          return '';
+        case 'touch':
+          if (!args[0]) return 'Usage: touch <filename>';
+          if (dir[args[0]]) return 'Folder or file already exists';
+          dir[args[0]] = '';
+          saveFS();
+          return '';
+        case 'echo':
+          const i = args.indexOf('>');
+          if (i !== -1) {
+            const file = args[i + 1];
+            if (!file) return 'Usage: echo <text> > <filename>';
+            const txt = args.slice(0, i).join(' ');
+            dir[file] = txt;
+            saveFS();
+            return '';
+          } else {
+            return args.join(' ');
+          }
+        case 'cat':
+          if (!args[0]) return 'Usage: cat <filename>';
+          return dir[args[0]] !== undefined ? dir[args[0]] : 'File not found';
+        case 'ls':
+          return Object.keys(dir).join('  ');
+        case 'cd':
+          if (!args[0]) return 'Usage: cd <directory>';
+          if (args[0] === '..') {
+            currentPath = getParentPath(currentPath);
+          } else if (dir[args[0]] && typeof dir[args[0]] === 'object') {
+            currentPath = currentPath + args[0] + '/';
+          } else {
+            return 'No such directory';
+          }
+          return '';
+        case 'clear':
+          termDiv.innerHTML = '';
+          return '';
+        default:
+          return 'Command not found';
+      }
+    }
+    printPrompt();
+  }
+
+  // --- FILE EXPLORER ---
+  function openFileExplorer() {
+    const content = makeWindow('File Explorer', '<div class="file-explorer" id="explorer"></div>');
+    renderExplorer(currentPath);
+
+    function renderExplorer(path) {
+      const dir = getDir(path);
+      if (!dir) return;
+      let html = `<ul>`;
+      for (const key in dir) {
+        if (typeof dir[key] === 'object') {
+          html += `<li><b>[${key}]</b> <button data-path="${path + key + '/'}" class="open-dir-btn">Open</button></li>`;
+        } else {
+          html += `<li>${key}: ${dir[key]}</li>`;
+        }
+      }
+      html += '</ul>';
+      document.getElementById('explorer').innerHTML = `
+        <div><button id="up-btn">⬆️ Up</button></div>
+        <div><strong>Current Path: ${path}</strong></div>
+        ${html}
+      `;
+
+      document.getElementById('up-btn').onclick = () => {
+        const upPath = getParentPath(path);
+        currentPath = upPath;
+        renderExplorer(upPath);
+      };
+      Array.from(document.querySelectorAll('.open-dir-btn')).forEach(btn => {
+        btn.onclick = () => {
+          currentPath = btn.getAttribute('data-path');
+          renderExplorer(currentPath);
+        };
+      });
+    }
+  }
+
+  // --- WEB BROWSER ---
+  function openBrowser() {
+    const content = makeWindow('Web Browser', `
+      <div style="padding-bottom: 6px;">
+        <input id="browser-url" type="text" placeholder="https://example.com" style="width: 80%;" />
+        <button id="go-btn">Go</button>
+      </div>
+      <iframe class="browser-frame" id="browser-frame" src=""></iframe>
+    `);
+
+    const urlInput = content.querySelector('#browser-url');
+    const goBtn = content.querySelector('#go-btn');
+    const frame = content.querySelector('#browser-frame');
+
+    goBtn.onclick = () => {
+      let url = urlInput.value.trim();
+      if (!url) return;
+      if (!url.startsWith('http://') && !url.startsWith('https://')) {
+        url = 'https://' + url;
+      }
+      frame.src = url;
+    };
+
+    urlInput.addEventListener('keydown', e => {
+      if (e.key === 'Enter') goBtn.click();
+    });
+  }
+
+  // --- APP STORE & GAMES ---
+  const availableGames = [
+    { id: 'tic-tac-toe', name: 'Tic Tac Toe', description: 'Play Tic Tac Toe against the computer.' },
+    { id: 'snake', name: 'Snake', description: 'Classic snake game.' },
+    { id: 'guess-number', name: 'Guess the Number', description: 'Try to guess the number.' }
+  ];
+
+  function openAppStore() {
+    const user = users[currentUser];
+    if (!user.installedGames) user.installedGames = [];
+
+    const content = makeWindow('App Store', `
+      <div id="app-store-list">
+        ${availableGames.map(game => {
+          const installed = user.installedGames.includes(game.id);
+          return `
+            <div style="border-bottom: 1px solid #ccc; margin-bottom: 8px; padding-bottom: 8px;">
+              <strong>${game.name}</strong>
+              <p style="margin:4px 0;">${game.description}</p>
+              <button data-gameid="${game.id}" ${installed ? 'disabled' : ''}>
+                ${installed ? 'Installed' : 'Install'}
+              </button>
+            </div>
+          `;
+        }).join('')}
+      </div>
+    `);
+
+    const installButtons = content.querySelectorAll('button[data-gameid]');
+    installButtons.forEach(btn => {
+      btn.onclick = () => {
+        const gameId = btn.getAttribute('data-gameid');
+        if (!user.installedGames.includes(gameId)) {
+          user.installedGames.push(gameId);
+          saveUsers();
+          btn.innerText = 'Installed';
+          btn.disabled = true;
+          alert(`Installed ${availableGames.find(g => g.id === gameId).name}`);
+          if (document.querySelector('#games-list')) openGames();
+        }
+      };
+    });
+  }
+
+  function openGames() {
+    const user = users[currentUser];
+    if (!user.installedGames) user.installedGames = [];
+
+    if (user.installedGames.length === 0) {
+      makeWindow('Games', '<p>No games installed yet. Open the App Store to install games!</p>');
+      return;
+    }
+
+    const gamesHtml = user.installedGames.map(gameId => {
+      const game = availableGames.find(g => g.id === gameId);
+      return `
+        <div style="border-bottom: 1px solid #ccc; margin-bottom: 8px; padding-bottom: 8px;">
+          <strong>${game.name}</strong>
+          <button data-gameid="${game.id}">Play</button>
+        </div>
+      `;
+    }).join('');
+
+    const content = makeWindow('Games', `<div id="games-list">${gamesHtml}</div><div id="game-container" style="margin-top: 15px;"></div>`);
+
+    const playButtons = content.querySelectorAll('button[data-gameid]');
+    const gameContainer = content.querySelector('#game-container');
+
+    playButtons.forEach(btn => {
+      btn.onclick = () => {
+        const gameId = btn.getAttribute('data-gameid');
+        loadGame(gameId, gameContainer);
+      };
+    });
+  }
+
+  function loadGame(gameId, container) {
+    switch (gameId) {
+      case 'tic-tac-toe':
+        container.innerHTML = `<p><em>Tic Tac Toe coming soon!</em></p>`;
+        break;
+      case 'snake':
+        container.innerHTML = `<p><em>Snake game coming soon!</em></p>`;
+        break;
+      case 'guess-number':
+        container.innerHTML = `
+          <p>Guess a number between 1 and 100</p>
+          <input type="number" id="guess-input" min="1" max="100" />
+          <button id="guess-btn">Guess</button>
+          <p id="guess-result"></p>
+        `;
+        const guessInput = container.querySelector('#guess-input');
+        const guessBtn = container.querySelector('#guess-btn');
+        const guessResult = container.querySelector('#guess-result');
+
+        let secretNumber = Math.floor(Math.random() * 100) + 1;
+        let attempts = 0;
+
+        guessBtn.onclick = () => {
+          const guess = parseInt(guessInput.value);
+          if (isNaN(guess) || guess < 1 || guess > 100) {
+            guessResult.textContent = 'Enter a valid number between 1 and 100.';
+            return;
+          }
+          attempts++;
+          if (guess === secretNumber) {
+            guessResult.textContent = `Correct! You guessed it in ${attempts} attempts. Starting new game.`;
+            secretNumber = Math.floor(Math.random() * 100) + 1;
+            attempts = 0;
+            guessInput.value = '';
+          } else if (guess < secretNumber) {
+            guessResult.textContent = 'Too low!';
+          } else {
+            guessResult.textContent = 'Too high!';
+          }
+        };
+        break;
+      default:
+        container.innerHTML = `<p>Game not found.</p>`;
+    }
+  }
+
+  // --- SETTINGS ---
+  function openSettings() {
+    const content = makeWindow('Settings', `
+      <div>
+        <label for="wallpaper-url">Wallpaper URL:</label><br/>
+        <input type="text" id="wallpaper-url" placeholder="Image URL" style="width: 100%;" />
+        <button id="set-wallpaper">Set Wallpaper</button>
+      </div>
+    `);
+    const wallpaperInput = content.querySelector('#wallpaper-url');
+    const setBtn = content.querySelector('#set-wallpaper');
+
+    setBtn.onclick = () => {
+      const url = wallpaperInput.value.trim();
+      if (url) {
+        document.body.style.background = `url('${url}') no-repeat center center fixed`;
+        document.body.style.backgroundSize = 'cover';
+      }
+    };
+  }
+
+  // --- LOGIN & CREATE ACCOUNT ---
+  const loginScreen = document.getElementById('login-screen');
+  const createScreen = document.getElementById('create-account-screen');
+  const loginBtn = document.getElementById('login-btn');
+  const createBtn = document.getElementById('create-btn');
+  const goCreateLink = document.getElementById('go-create-account');
+  const goLoginLink = document.getElementById('go-login');
+  const loginMsg = document.getElementById('login-msg');
+  const createMsg = document.getElementById('create-msg');
+
+  goCreateLink.onclick = () => {
+    loginScreen.style.display = 'none';
+    createScreen.style.display = 'block';
+    clearMessages();
+  };
+  goLoginLink.onclick = () => {
+    createScreen.style.display = 'none';
+    loginScreen.style.display = 'block';
+    clearMessages();
+  };
+
+  function clearMessages() {
+    loginMsg.textContent = '';
+    createMsg.textContent = '';
+  }
+
+  loginBtn.onclick = () => {
+    const username = document.getElementById('login-username').value.trim();
+    const password = document.getElementById('login-password').value;
+    if (!username || !password) {
+      loginMsg.textContent = 'Please fill all fields.';
+      return;
+    }
+    loadUsers();
+    if (!users[username]) {
+      loginMsg.textContent = 'User does not exist.';
+      return;
+    }
+    if (users[username].password !== password) {
+      loginMsg.textContent = 'Incorrect password.';
+      return;
+    }
+    currentUser = username;
+    loadFS();
+    afterLogin();
+  };
+
+  createBtn.onclick = () => {
+    const username = document.getElementById('create-username').value.trim();
+    const password = document.getElementById('create-password').value;
+    if (!username || !password) {
+      createMsg.textContent = 'Please fill all fields.';
+      return;
+    }
+    loadUsers();
+    if (users[username]) {
+      createMsg.textContent = 'Username already taken.';
+      return;
+    }
+    users[username] = {
+      password,
+      filesystem: { '/': {} },
+      installedGames: []
+    };
+    saveUsers();
+    alert('Account created! Please login.');
+    createScreen.style.display = 'none';
+    loginScreen.style.display = 'block';
+    clearMessages();
+  };
+
+  function afterLogin() {
+    loginScreen.style.display = 'none';
+    createScreen.style.display = 'none';
+    document.getElementById('taskbar').style.display = 'flex';
+    document.getElementById('desktop').innerHTML = '';
+    document.body.style.backgroundColor = '#2a2a2a';
+    // You can open a welcome window or desktop icons here if wanted
+    makeWindow(`Welcome, ${currentUser}!`, `<p>This is your WebOS desktop.</p>`);
+  }
+
+  function logout() {
+    currentUser = null;
+    fs = {};
+    currentPath = '/';
+    document.getElementById('taskbar').style.display = 'none';
+    document.getElementById('desktop').innerHTML = '';
+    document.body.style.background = "url('https://wallpaperaccess.com/full/317501.jpg') no-repeat center center fixed";
+    document.body.style.backgroundSize = 'cover';
+    loginScreen.style.display = 'block';
+  }
+
+  // Initial focus
+  document.getElementById('login-username').focus();
+
+  // Expose for console debugging (optional)
+  window.openTerminal = openTerminal;
+  window.openFileExplorer = openFileExplorer;
+  window.openBrowser = openBrowser;
+  window.openAppStore = openAppStore;
+  window.openGames = openGames;
+  window.openSettings = openSettings;
+  window.logout = logout;
+})();
+</script>
+</body>
+</html>
